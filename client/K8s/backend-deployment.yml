@@ -1,0 +1,38 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: myproject-backend
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: myproject-backend
+  template:
+    metadata:
+      labels:
+        app: myproject-backend
+    spec:
+      containers:
+      - name: backend
+        image: maisam12/myproject-backend:v1
+        ports:
+        - containerPort: 5000
+        env:
+        - name: MONGO_URI
+          valueFrom:
+            secretKeyRef:
+              name: mongo-secret
+              key: MONGO_URI
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: backend-service
+spec:
+  type: LoadBalancer
+  selector:
+    app: myproject-backend
+  ports:
+  - protocol: TCP
+    port: 80
+    targetPort: 5000
