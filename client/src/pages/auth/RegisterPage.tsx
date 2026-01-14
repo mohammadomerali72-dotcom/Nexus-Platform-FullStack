@@ -1,10 +1,10 @@
 import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { User, Mail, Lock, CircleDollarSign, Building2, AlertCircle } from 'lucide-react';
-import { useAuth } from '../../context/AuthContext';
 import { Button } from '../../components/ui/Button';
 import { Input } from '../../components/ui/Input';
 import { UserRole } from '../../types';
+import api from '../../services/api'; // This is the bridge to your Port 5000 backend
 
 export const RegisterPage: React.FC = () => {
   const [name, setName] = useState('');
@@ -15,27 +15,46 @@ export const RegisterPage: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   
-  const { register } = useAuth();
   const navigate = useNavigate();
   
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
     
-    // Validate passwords match
+    // 1. FRONTEND VALIDATION
     if (password !== confirmPassword) {
       setError('Passwords do not match');
+      return;
+    }
+
+    if (password.length < 6) {
+      setError('Password must be at least 6 characters long');
       return;
     }
     
     setIsLoading(true);
     
     try {
-      await register(name, email, password, role);
-      // Redirect based on user role
-      navigate(role === 'entrepreneur' ? '/dashboard/entrepreneur' : '/dashboard/investor');
-    } catch (err) {
-      setError((err as Error).message);
+      // 2. PREPARE DATA: Convert lowercase UI role to Capitalized Database role
+      const signupData = {
+        name: name.trim(),
+        email: email.trim().toLowerCase(),
+        password: password,
+        role: role === 'entrepreneur' ? 'Entrepreneur' : 'Investor'
+      };
+
+      // 3. API CALL: Send data to Node.js -> XAMPP MySQL
+      const response = await api.post('/auth/register', signupData);
+      
+      if (response.status === 201 || response.data.status === "success") {
+          alert("Registration Successful! Your account has been saved to the database.");
+          navigate('/login'); 
+      }
+    } catch (err: any) {
+      // 4. ERROR HANDLING: Capture specific messages from the backend
+      const backendMessage = err.response?.data?.message || err.response?.data?.errors?.[0]?.msg;
+      setError(backendMessage || "Connection failed. Please ensure the backend server is running.");
+    } finally {
       setIsLoading(false);
     }
   };
@@ -44,42 +63,41 @@ export const RegisterPage: React.FC = () => {
     <div className="min-h-screen bg-gray-50 flex flex-col justify-center py-12 sm:px-6 lg:px-8">
       <div className="sm:mx-auto sm:w-full sm:max-w-md">
         <div className="flex justify-center">
-          <div className="w-12 h-12 bg-primary-600 rounded-md flex items-center justify-center">
-            <svg width="32" height="32" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" className="text-white">
-              <path d="M20 7H4C2.89543 7 2 7.89543 2 9V19C2 20.1046 2.89543 21 4 21H20C21.1046 21 22 20.1046 22 19V9C22 7.89543 21.1046 7 20 7Z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-              <path d="M16 21V5C16 3.89543 15.1046 3 14 3H10C8.89543 3 8 3.89543 8 5V21" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-            </svg>
+          <div className="w-14 h-14 bg-blue-600 rounded-xl flex items-center justify-center shadow-lg transform hover:rotate-12 transition-transform">
+            <Building2 size={32} className="text-white" />
           </div>
         </div>
-        <h2 className="mt-6 text-center text-3xl font-extrabold text-gray-900">
+        <h2 className="mt-6 text-center text-3xl font-extrabold text-gray-900 tracking-tight">
           Create your account
         </h2>
-        <p className="mt-2 text-center text-sm text-gray-600">
-          Join Business Nexus to connect with partners
+        <p className="mt-2 text-center text-sm text-gray-500 font-medium">
+          Join the Nexus network of Investors & Entrepreneurs
         </p>
       </div>
 
       <div className="mt-8 sm:mx-auto sm:w-full sm:max-w-md">
-        <div className="bg-white py-8 px-4 shadow sm:rounded-lg sm:px-10">
+        <div className="bg-white py-8 px-4 shadow-2xl sm:rounded-2xl sm:px-10 border border-gray-100">
+          
+          {/* BACKEND ERROR DISPLAY */}
           {error && (
-            <div className="mb-4 bg-error-50 border border-error-500 text-error-700 px-4 py-3 rounded-md flex items-start">
+            <div className="mb-4 bg-red-50 border-l-4 border-red-500 text-red-700 px-4 py-3 rounded shadow-sm flex items-start animate-pulse">
               <AlertCircle size={18} className="mr-2 mt-0.5" />
-              <span>{error}</span>
+              <span className="font-semibold text-sm">{error}</span>
             </div>
           )}
           
           <form className="space-y-6" onSubmit={handleSubmit}>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                I am registering as a
+              <label className="block text-sm font-bold text-gray-700 mb-2">
+                I am registering as an:
               </label>
               <div className="grid grid-cols-2 gap-3">
                 <button
                   type="button"
-                  className={`py-3 px-4 border rounded-md flex items-center justify-center transition-colors ${
+                  className={`py-2.5 px-4 border rounded-lg flex items-center justify-center transition-all ${
                     role === 'entrepreneur'
-                      ? 'border-primary-500 bg-primary-50 text-primary-700'
-                      : 'border-gray-300 text-gray-700 hover:bg-gray-50'
+                      ? 'border-blue-600 bg-blue-50 text-blue-700 ring-2 ring-blue-500 font-bold'
+                      : 'border-gray-300 text-gray-600 hover:bg-gray-50'
                   }`}
                   onClick={() => setRole('entrepreneur')}
                 >
@@ -89,10 +107,10 @@ export const RegisterPage: React.FC = () => {
                 
                 <button
                   type="button"
-                  className={`py-3 px-4 border rounded-md flex items-center justify-center transition-colors ${
+                  className={`py-2.5 px-4 border rounded-lg flex items-center justify-center transition-all ${
                     role === 'investor'
-                      ? 'border-primary-500 bg-primary-50 text-primary-700'
-                      : 'border-gray-300 text-gray-700 hover:bg-gray-50'
+                      ? 'border-blue-600 bg-blue-50 text-blue-700 ring-2 ring-blue-500 font-bold'
+                      : 'border-gray-300 text-gray-600 hover:bg-gray-50'
                   }`}
                   onClick={() => setRole('investor')}
                 >
@@ -105,90 +123,64 @@ export const RegisterPage: React.FC = () => {
             <Input
               label="Full name"
               type="text"
+              placeholder="Enter your name"
               value={name}
               onChange={(e) => setName(e.target.value)}
               required
               fullWidth
-              startAdornment={<User size={18} />}
+              startAdornment={<User size={18} className="text-gray-400" />}
             />
             
             <Input
               label="Email address"
               type="email"
+              placeholder="name@example.com"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               required
               fullWidth
-              startAdornment={<Mail size={18} />}
+              startAdornment={<Mail size={18} className="text-gray-400" />}
             />
             
             <Input
               label="Password"
               type="password"
+              placeholder="Min. 6 characters"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               required
               fullWidth
-              startAdornment={<Lock size={18} />}
+              startAdornment={<Lock size={18} className="text-gray-400" />}
             />
             
             <Input
               label="Confirm password"
               type="password"
+              placeholder="Repeat password"
               value={confirmPassword}
               onChange={(e) => setConfirmPassword(e.target.value)}
               required
               fullWidth
-              startAdornment={<Lock size={18} />}
+              startAdornment={<Lock size={18} className="text-gray-400" />}
             />
-            
-            <div className="flex items-center">
-              <input
-                id="terms"
-                name="terms"
-                type="checkbox"
-                required
-                className="h-4 w-4 text-primary-600 focus:ring-primary-500 border-gray-300 rounded"
-              />
-              <label htmlFor="terms" className="ml-2 block text-sm text-gray-900">
-                I agree to the{' '}
-                <a href="#" className="font-medium text-primary-600 hover:text-primary-500">
-                  Terms of Service
-                </a>{' '}
-                and{' '}
-                <a href="#" className="font-medium text-primary-600 hover:text-primary-500">
-                  Privacy Policy
-                </a>
-              </label>
-            </div>
             
             <Button
               type="submit"
               fullWidth
-              isLoading={isLoading}
+              disabled={isLoading}
+              className="bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 rounded-xl shadow-lg hover:shadow-blue-200 transition-all"
             >
-              Create account
+              {isLoading ? 'Creating Account...' : 'Create account'}
             </Button>
           </form>
           
-          <div className="mt-6">
-            <div className="relative">
-              <div className="absolute inset-0 flex items-center">
-                <div className="w-full border-t border-gray-300"></div>
-              </div>
-              <div className="relative flex justify-center text-sm">
-                <span className="px-2 bg-white text-gray-500">Or</span>
-              </div>
-            </div>
-            
-            <div className="mt-2 text-center">
-              <p className="text-sm text-gray-600">
-                Already have an account?{' '}
-                <Link to="/login" className="font-medium text-primary-600 hover:text-primary-500">
-                  Sign in
-                </Link>
-              </p>
-            </div>
+          <div className="mt-6 text-center border-t border-gray-100 pt-6">
+            <p className="text-sm text-gray-500">
+              Already have an account?{' '}
+              <Link to="/login" className="font-bold text-blue-600 hover:text-blue-700 underline underline-offset-4">
+                Sign in
+              </Link>
+            </p>
           </div>
         </div>
       </div>

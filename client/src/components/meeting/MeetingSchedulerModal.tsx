@@ -2,175 +2,153 @@
 
 import type React from "react"
 import { useState } from "react"
-import { MapPin, Video, FileText } from "lucide-react"
+import { Video, FileText, Calendar, Clock } from "lucide-react"
 import { Modal } from "../ui/Modal"
 import { Button } from "../ui/Button"
 import { Input } from "../ui/Input"
 import { Textarea } from "../ui/Textarea"
-import { collaborationService } from "../../services/collaborationService"
 import toast from "react-hot-toast"
+import api from "../../services/api" // Bridge to your Port 5000 backend
 
 interface MeetingSchedulerModalProps {
   isOpen: boolean
   onClose: () => void
-  request: any
-  onMeetingScheduled: (meetingDetails: any) => void
+  request: any // Contains info about the person you are booking with
+  onMeetingsScheduled?: (meetingDetails: any) => void
 }
 
 export const MeetingSchedulerModal: React.FC<MeetingSchedulerModalProps> = ({
   isOpen,
   onClose,
   request,
-  onMeetingScheduled,
+  onMeetingsScheduled,
 }) => {
   const [isLoading, setIsLoading] = useState(false)
   const [formData, setFormData] = useState({
-    scheduledFor: "",
-    duration: 30,
+    title: "",
+    date: "",
+    time: "",
     location: "",
-    meetingLink: "",
     agenda: "",
   })
-  const [error, setError] = useState("")
 
-  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target
     setFormData((prev) => ({ ...prev, [name]: value }))
   }
 
+  // --- MILESTONE 3: FULLY FUNCTIONAL SCHEDULING LOGIC ---
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setIsLoading(true)
-    setError("")
 
     try {
-      // Check for meeting conflicts first
-      const conflictCheck = await collaborationService.checkMeetingConflict(
-        formData.scheduledFor,
-        formData.duration,
-        request.id,
-      )
+      // 1. Get current logged-in user from localStorage
+      const userStr = localStorage.getItem('user');
+      const currentUser = userStr ? JSON.parse(userStr) : null;
 
-      if (conflictCheck.success && conflictCheck.data.hasConflict) {
-        setError("This meeting time conflicts with existing meetings. Please choose a different time.")
-        toast.error("Meeting time conflict detected")
-        setIsLoading(false)
-        return
+      if (!currentUser) {
+        toast.error("Session expired. Please login again.");
+        return;
       }
 
-      // Schedule the meeting
-      const response = await collaborationService.scheduleMeeting(request.id, formData)
-
-      if (response.success) {
-        toast.success("Meeting scheduled successfully!")
-        onMeetingScheduled(response.data.meeting)
-        onClose()
-      } else {
-        setError(response.error || "Failed to schedule meeting")
-        toast.error(response.error || "Failed to schedule meeting")
+      // 2. Prepare payload for XAMPP MySQL
+      // We determine who is the entrepreneur and who is the investor based on current role
+      const payload = {
+        title: formData.title || `Discussion regarding Nexus Project`,
+        date: formData.date, 
+        time: formData.time, 
+        entrepreneurId: currentUser.role === 'Entrepreneur' ? currentUser.id : (request?.entrepreneurId || 1),
+        investorId: currentUser.role === 'Investor' ? currentUser.id : (request?.investorId || 1),
       }
-    } catch (error) {
-      console.error("Failed to schedule meeting:", error)
-      setError("Failed to schedule meeting. Please try again.")
-      toast.error("Failed to schedule meeting. Please try again.")
+
+      // 3. Call your Node.js API
+      const response = await api.post('/meetings/schedule', payload);
+
+      if (response.status === 201 || response.data.status === "success") {
+        toast.success("Meeting saved to MySQL Database!");
+        if (onMeetingsScheduled) onMeetingsScheduled(response.data.meeting);
+        
+        // Reset and close
+        setFormData({ title: "", date: "", time: "", location: "", agenda: "" });
+        onClose();
+      }
+    } catch (error: any) {
+      // MILESTONE 3 Requirement: Show Conflict Detection Errors
+      const errorMessage = error.response?.data?.message || "Time slot conflict! Try another time.";
+      toast.error(errorMessage);
     } finally {
-      setIsLoading(false)
+      setIsLoading(false);
     }
   }
 
   return (
-    <Modal isOpen={isOpen} onClose={onClose} title="Schedule Meeting">
-      <form onSubmit={handleSubmit} className="space-y-4">
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div>
-            <label htmlFor="scheduledFor" className="block text-sm font-medium text-gray-700 mb-1">
-              Date
-            </label>
-            <Input
-              type="datetime-local"
-              id="scheduledFor"
-              name="scheduledFor"
-              value={formData.scheduledFor}
-              onChange={handleInputChange}
-              required
-            />
-          </div>
-
-          <div>
-            <label htmlFor="duration" className="block text-sm font-medium text-gray-700 mb-1">
-              Duration (minutes)
-            </label>
-            <select
-              id="duration"
-              name="duration"
-              value={formData.duration}
-              onChange={handleInputChange}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
-              required
-            >
-              <option value={15}>15 minutes</option>
-              <option value={30}>30 minutes</option>
-              <option value={45}>45 minutes</option>
-              <option value={60}>60 minutes</option>
-              <option value={90}>90 minutes</option>
-              <option value={120}>120 minutes</option>
-            </select>
-          </div>
-        </div>
-
+    <Modal isOpen={isOpen} onClose={onClose} title="Schedule Collaboration Meeting">
+      <form onSubmit={handleSubmit} className="space-y-4 p-4">
         <div>
-          <label htmlFor="location" className="block text-sm font-medium text-gray-700 mb-1">
-            <MapPin size={16} className="inline mr-1" />
-            Location
-          </label>
           <Input
-            type="text"
-            id="location"
-            name="location"
-            value={formData.location}
+            label="Meeting Title"
+            name="title"
+            placeholder="e.g. Seed Funding Pitch"
+            value={formData.title}
             onChange={handleInputChange}
-            placeholder="e.g., Conference Room A, or physical address"
+            required
+            startAdornment={<FileText size={18} className="text-gray-400" />}
           />
         </div>
 
-        <div>
-          <label htmlFor="meetingLink" className="block text-sm font-medium text-gray-700 mb-1">
-            <Video size={16} className="inline mr-1" />
-            Meeting Link (optional)
-          </label>
+        <div className="grid grid-cols-2 gap-4">
           <Input
-            type="url"
-            id="meetingLink"
-            name="meetingLink"
-            value={formData.meetingLink}
+            label="Date"
+            name="date"
+            type="date"
+            value={formData.date}
             onChange={handleInputChange}
-            placeholder="https://meet.google.com/xxx-xxx-xxx"
+            required
+            startAdornment={<Calendar size={18} className="text-gray-400" />}
+          />
+          <Input
+            label="Time"
+            name="time"
+            type="time"
+            value={formData.time}
+            onChange={handleInputChange}
+            required
+            startAdornment={<Clock size={18} className="text-gray-400" />}
           />
         </div>
 
-        <div>
-          <label htmlFor="agenda" className="block text-sm font-medium text-gray-700 mb-1">
-            <FileText size={16} className="inline mr-1" />
-            Agenda
-          </label>
+        <Input
+          label="Location or Video Link"
+          name="location"
+          placeholder="Zoom, Google Meet, or Office address"
+          value={formData.location}
+          onChange={handleInputChange}
+          startAdornment={<Video size={18} className="text-gray-400" />}
+        />
+
+        {/* FIX: Handled label manually to avoid TypeScript property errors */}
+        <div className="space-y-1">
+          <label className="block text-sm font-medium text-gray-700">Meeting Agenda</label>
           <Textarea
-            id="agenda"
             name="agenda"
+            placeholder="Briefly describe the purpose of this call..."
             value={formData.agenda}
             onChange={handleInputChange}
-            placeholder="What will be discussed in this meeting?"
             rows={3}
           />
         </div>
 
-        {error && <div className="p-3 bg-error-50 text-error-700 rounded-md">{error}</div>}
-
-        <div className="flex justify-end space-x-3 pt-4">
-          <Button type="button" variant="outline" onClick={onClose}>
+        <div className="flex justify-end space-x-3 pt-6 border-t">
+          <Button variant="outline" type="button" onClick={onClose} disabled={isLoading}>
             Cancel
           </Button>
-          <Button type="submit" variant="primary" disabled={isLoading}>
-            {isLoading ? "Scheduling..." : "Schedule Meeting"}
+          <Button 
+            type="submit" 
+            isLoading={isLoading} 
+            className="bg-blue-600 hover:bg-blue-700 text-white px-8 font-bold shadow-md"
+          >
+            Confirm Booking
           </Button>
         </div>
       </form>

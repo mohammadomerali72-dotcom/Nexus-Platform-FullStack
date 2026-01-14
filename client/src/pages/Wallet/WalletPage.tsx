@@ -2,32 +2,18 @@
 
 import type React from "react"
 import { useState, useEffect } from "react"
-import {
-  Wallet,
-  ArrowUpRight,
-  ArrowDownLeft,
-  Send,
-  TrendingUp,
-  DollarSign,
-  Clock,
-  CheckCircle,
-  XCircle,
-} from "lucide-react"
-import paymentService, { type Wallet as WalletType, type Transaction } from "../../services/paymentService"
+import { Wallet, Clock, Landmark, DollarSign, } from "lucide-react"
+import { Card, CardHeader, CardBody } from "../../components/ui/Card"
+import { Button } from "../../components/ui/Button"
+import { Input } from "../../components/ui/Input"
+import api from "../../services/api" 
 import toast from "react-hot-toast"
 
 export const WalletPage: React.FC = () => {
-  const [wallet, setWallet] = useState<WalletType | null>(null)
-  const [transactions, setTransactions] = useState<Transaction[]>([])
+  const [balance, setBalance] = useState(0)
+  const [transactions, setTransactions] = useState<any[]>([])
+  const [amount, setAmount] = useState("")
   const [loading, setLoading] = useState(true)
-  const [activeTab, setActiveTab] = useState<"overview" | "deposit" | "withdraw" | "transfer">("overview")
-
-  // Form states
-  const [depositAmount, setDepositAmount] = useState("")
-  const [withdrawAmount, setWithdrawAmount] = useState("")
-  const [transferAmount, setTransferAmount] = useState("")
-  const [recipientId, setRecipientId] = useState("")
-  const [transferDescription, setTransferDescription] = useState("")
   const [processing, setProcessing] = useState(false)
 
   useEffect(() => {
@@ -37,361 +23,144 @@ export const WalletPage: React.FC = () => {
   const loadWalletData = async () => {
     try {
       setLoading(true)
-      const [walletData, transactionsData] = await Promise.all([
-        paymentService.getWallet(),
-        paymentService.getTransactions({ limit: 10 }),
-      ])
-      setWallet(walletData)
-      setTransactions(transactionsData.transactions)
-    } catch (err: any) {
-      toast.error(err.response?.data?.message || "Failed to load wallet data")
+      const userStr = localStorage.getItem('user')
+      const user = userStr ? JSON.parse(userStr) : { id: 1 }
+
+      const response = await api.get(`/payments/history/${user.id}`)
+      const history = response.data
+      
+      setTransactions(history)
+
+      const total = history.reduce((acc: number, curr: any) => {
+        return curr.type === 'deposit' ? acc + Number(curr.amount) : acc - Number(curr.amount)
+      }, 0)
+      
+      setBalance(total)
+    } catch (err) {
+      console.error("Database fetch failed")
     } finally {
       setLoading(false)
     }
   }
 
-  const handleDeposit = async (e: React.FormEvent) => {
-    e.preventDefault()
+  const handleTransaction = async (type: 'deposit' | 'withdraw') => {
+    if (!amount || Number(amount) <= 0) {
+      toast.error("Please enter a valid amount")
+      return
+    }
+
     setProcessing(true)
-
     try {
-      const amount = Number.parseFloat(depositAmount)
-      if (isNaN(amount) || amount <= 0) {
-        throw new Error("Please enter a valid amount")
-      }
+      const userStr = localStorage.getItem('user')
+      const user = userStr ? JSON.parse(userStr) : { id: 1 }
 
-      const { clientSecret, transactionId } = await paymentService.createDepositIntent(amount)
+      await api.post('/payments/pay', {
+        amount: parseFloat(amount),
+        type,
+        userId: user.id,
+        description: `Wallet ${type}`
+      })
 
-      await paymentService.confirmDeposit(transactionId)
-
-      toast.success(`Successfully deposited $${amount.toFixed(2)}`)
-      setDepositAmount("")
-      await loadWalletData()
-      setActiveTab("overview")
-    } catch (err: any) {
-      toast.error(err.response?.data?.message || err.message || "Deposit failed")
+      toast.success(`${type.toUpperCase()} Successful!`)
+      setAmount("")
+      await loadWalletData() 
+    } catch (err) {
+      toast.error("Transaction failed. Check backend.")
     } finally {
       setProcessing(false)
     }
   }
 
-  const handleWithdraw = async (e: React.FormEvent) => {
-    e.preventDefault()
-    setProcessing(true)
-
-    try {
-      const amount = Number.parseFloat(withdrawAmount)
-      if (isNaN(amount) || amount <= 0) {
-        throw new Error("Please enter a valid amount")
-      }
-
-      await paymentService.requestWithdrawal(amount)
-
-      toast.success(`Withdrawal of $${amount.toFixed(2)} requested successfully`)
-      setWithdrawAmount("")
-      await loadWalletData()
-      setActiveTab("overview")
-    } catch (err: any) {
-      toast.error(err.response?.data?.message || err.message || "Withdrawal failed")
-    } finally {
-      setProcessing(false)
-    }
-  }
-
-  const handleTransfer = async (e: React.FormEvent) => {
-    e.preventDefault()
-    setProcessing(true)
-
-    try {
-      const amount = Number.parseFloat(transferAmount)
-      if (isNaN(amount) || amount <= 0) {
-        throw new Error("Please enter a valid amount")
-      }
-      if (!recipientId.trim()) {
-        throw new Error("Please enter recipient ID")
-      }
-
-      await paymentService.transferFunds(recipientId, amount, transferDescription)
-
-      toast.success(`Successfully transferred $${amount.toFixed(2)}`)
-      setTransferAmount("")
-      setRecipientId("")
-      setTransferDescription("")
-      await loadWalletData()
-      setActiveTab("overview")
-    } catch (err: any) {
-      toast.error(err.response?.data?.message || err.message || "Transfer failed")
-    } finally {
-      setProcessing(false)
-    }
-  }
-
-  const getStatusIcon = (status: string) => {
-    switch (status) {
-      case "completed":
-        return <CheckCircle className="w-5 h-5 text-green-500" />
-      case "pending":
-        return <Clock className="w-5 h-5 text-yellow-500" />
-      case "failed":
-        return <XCircle className="w-5 h-5 text-red-500" />
-      default:
-        return <Clock className="w-5 h-5 text-gray-500" />
-    }
-  }
-
-  const getTransactionIcon = (type: string) => {
-    switch (type) {
-      case "deposit":
-        return <ArrowDownLeft className="w-5 h-5 text-green-500" />
-      case "withdraw":
-        return <ArrowUpRight className="w-5 h-5 text-red-500" />
-      case "transfer_sent":
-        return <Send className="w-5 h-5 text-blue-500" />
-      case "transfer_received":
-        return <ArrowDownLeft className="w-5 h-5 text-green-500" />
-      default:
-        return <DollarSign className="w-5 h-5 text-gray-500" />
-    }
-  }
-
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center h-96">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary-600"></div>
-      </div>
-    )
-  }
+  if (loading) return <div className="p-20 text-center font-bold text-blue-600">Connecting to MySQL...</div>
 
   return (
-    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-      {/* Header */}
-      <div className="mb-8">
-        <h1 className="text-3xl font-bold text-gray-900">Wallet</h1>
-        <p className="mt-2 text-sm text-gray-600">Manage your funds and transactions</p>
+    <div className="max-w-6xl mx-auto px-4 py-8 space-y-8 animate-in fade-in duration-500">
+      <div className="flex items-center gap-3">
+        <Landmark className="text-blue-600" size={32} />
+        <h1 className="text-3xl font-black text-gray-900 uppercase tracking-tight">My Wallet</h1>
       </div>
 
-      {/* Balance Card */}
-      <div className="bg-gradient-to-br from-primary-600 to-primary-700 rounded-2xl p-8 text-white mb-8 shadow-lg">
-        <div className="flex items-center justify-between mb-6">
-          <div className="flex items-center gap-3">
-            <div className="bg-white/20 p-3 rounded-xl">
-              <Wallet className="w-6 h-6" />
-            </div>
-            <div>
-              <p className="text-sm text-primary-100">Available Balance</p>
-              <h2 className="text-4xl font-bold">${wallet?.balance.toFixed(2) || "0.00"}</h2>
-            </div>
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <div className="bg-gradient-to-br from-blue-600 to-indigo-900 rounded-3xl p-8 text-white shadow-2xl">
+          <p className="text-blue-100 text-xs font-bold uppercase tracking-widest">Available Balance</p>
+          <h2 className="text-5xl font-black mt-2">${balance.toLocaleString()}</h2>
+          <div className="mt-10 pt-4 border-t border-white/10 flex items-center justify-between">
+            <span className="text-[10px] font-bold uppercase opacity-70">MySQL Synchronized</span>
+            <Wallet size={20} className="opacity-40" />
           </div>
         </div>
 
-        <div className="grid grid-cols-3 gap-4 pt-6 border-t border-white/20">
-          <div>
-            <p className="text-xs text-primary-100 mb-1">Total Deposited</p>
-            <p className="text-lg font-semibold">${wallet?.totalDeposited.toFixed(2) || "0.00"}</p>
-          </div>
-          <div>
-            <p className="text-xs text-primary-100 mb-1">Total Withdrawn</p>
-            <p className="text-lg font-semibold">${wallet?.totalWithdrawn.toFixed(2) || "0.00"}</p>
-          </div>
-          <div>
-            <p className="text-xs text-primary-100 mb-1">Total Transferred</p>
-            <p className="text-lg font-semibold">${wallet?.totalTransferred.toFixed(2) || "0.00"}</p>
-          </div>
-        </div>
+        <Card className="lg:col-span-2 shadow-xl border-gray-100">
+          <CardHeader className="bg-gray-50/50 border-b p-5 font-bold text-gray-700 uppercase text-xs">Quick Actions</CardHeader>
+          <CardBody className="p-6">
+            <div className="space-y-4">
+              <Input 
+                placeholder="0.00" 
+                type="number"
+                value={amount} 
+                onChange={(e) => setAmount(e.target.value)}
+                startAdornment={<DollarSign size={18} className="text-blue-600" />}
+              />
+              <div className="flex flex-col sm:flex-row gap-3">
+                <Button 
+                  onClick={() => handleTransaction('deposit')} 
+                  disabled={processing}
+                  className="flex-1 bg-green-600 hover:bg-green-700 text-white font-bold h-12 rounded-xl"
+                >
+                  {processing ? "Saving..." : "Deposit"}
+                </Button>
+                <Button 
+                  variant="outline" 
+                  onClick={() => handleTransaction('withdraw')} 
+                  disabled={processing}
+                  className="flex-1 border-2 border-red-100 text-red-600 font-bold hover:bg-red-50 h-12 rounded-xl"
+                >
+                  Withdraw
+                </Button>
+              </div>
+            </div>
+          </CardBody>
+        </Card>
       </div>
 
-      {/* Action Tabs */}
-      <div className="bg-white rounded-xl shadow-sm border border-gray-200 mb-8">
-        <div className="border-b border-gray-200">
-          <nav className="flex -mb-px">
-            {[
-              { id: "overview", label: "Overview", icon: TrendingUp },
-              { id: "deposit", label: "Deposit", icon: ArrowDownLeft },
-              { id: "withdraw", label: "Withdraw", icon: ArrowUpRight },
-              { id: "transfer", label: "Transfer", icon: Send },
-            ].map((tab) => (
-              <button
-                key={tab.id}
-                onClick={() => setActiveTab(tab.id as any)}
-                className={`flex items-center gap-2 px-6 py-4 text-sm font-medium border-b-2 transition-colors ${
-                  activeTab === tab.id
-                    ? "border-primary-600 text-primary-600"
-                    : "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300"
-                }`}
-              >
-                <tab.icon className="w-4 h-4" />
-                {tab.label}
-              </button>
-            ))}
-          </nav>
+      <Card className="shadow-xl overflow-hidden border-0">
+        <div className="p-5 bg-gray-900 text-white flex items-center gap-2">
+          <Clock size={18} className="text-blue-400" />
+          <h2 className="font-bold uppercase text-xs tracking-widest">Transaction History</h2>
         </div>
-
-        <div className="p-6">
-          {activeTab === "overview" && (
-            <div>
-              <h3 className="text-lg font-semibold text-gray-900 mb-4">Recent Transactions</h3>
-              {transactions.length === 0 ? (
-                <div className="text-center py-12">
-                  <DollarSign className="w-12 h-12 text-gray-300 mx-auto mb-3" />
-                  <p className="text-gray-500">No transactions yet</p>
-                </div>
-              ) : (
-                <div className="space-y-3">
-                  {transactions.map((transaction) => (
-                    <div
-                      key={transaction._id}
-                      className="flex items-center justify-between p-4 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors"
-                    >
-                      <div className="flex items-center gap-4">
-                        <div className="bg-white p-2 rounded-lg">{getTransactionIcon(transaction.type)}</div>
-                        <div>
-                          <p className="font-medium text-gray-900">
-                            {transaction.description || transaction.type.replace("_", " ")}
-                          </p>
-                          <p className="text-sm text-gray-500">
-                            {new Date(transaction.createdAt).toLocaleDateString("en-US", {
-                              month: "short",
-                              day: "numeric",
-                              year: "numeric",
-                              hour: "2-digit",
-                              minute: "2-digit",
-                            })}
-                          </p>
-                        </div>
-                      </div>
-                      <div className="flex items-center gap-4">
-                        <div className="text-right">
-                          <p
-                            className={`font-semibold ${
-                              transaction.type === "deposit" || transaction.type === "transfer_received"
-                                ? "text-green-600"
-                                : "text-red-600"
-                            }`}
-                          >
-                            {transaction.type === "deposit" || transaction.type === "transfer_received" ? "+" : "-"}$
-                            {transaction.amount.toFixed(2)}
-                          </p>
-                          <div className="flex items-center gap-1 text-sm">
-                            {getStatusIcon(transaction.status)}
-                            <span className="text-gray-500 capitalize">{transaction.status}</span>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-          )}
-
-          {activeTab === "deposit" && (
-            <form onSubmit={handleDeposit} className="max-w-md">
-              <h3 className="text-lg font-semibold text-gray-900 mb-4">Deposit Funds</h3>
-              <div className="mb-4">
-                <label className="block text-sm font-medium text-gray-700 mb-2">Amount (USD)</label>
-                <input
-                  type="number"
-                  step="0.01"
-                  min="0.01"
-                  value={depositAmount}
-                  onChange={(e) => setDepositAmount(e.target.value)}
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
-                  placeholder="0.00"
-                  required
-                />
-              </div>
-              <button
-                type="submit"
-                disabled={processing}
-                className="w-full bg-primary-600 text-white py-2 px-4 rounded-lg hover:bg-primary-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors font-medium"
-              >
-                {processing ? "Processing..." : "Deposit Funds"}
-              </button>
-              <p className="mt-3 text-xs text-gray-500">
-                Note: Stripe integration requires STRIPE_SECRET_KEY environment variable
-              </p>
-            </form>
-          )}
-
-          {activeTab === "withdraw" && (
-            <form onSubmit={handleWithdraw} className="max-w-md">
-              <h3 className="text-lg font-semibold text-gray-900 mb-4">Withdraw Funds</h3>
-              <div className="mb-4">
-                <label className="block text-sm font-medium text-gray-700 mb-2">Amount (USD)</label>
-                <input
-                  type="number"
-                  step="0.01"
-                  min="0.01"
-                  max={wallet?.balance}
-                  value={withdrawAmount}
-                  onChange={(e) => setWithdrawAmount(e.target.value)}
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
-                  placeholder="0.00"
-                  required
-                />
-                <p className="mt-1 text-xs text-gray-500">Available: ${wallet?.balance.toFixed(2)}</p>
-              </div>
-              <button
-                type="submit"
-                disabled={processing}
-                className="w-full bg-primary-600 text-white py-2 px-4 rounded-lg hover:bg-primary-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors font-medium"
-              >
-                {processing ? "Processing..." : "Request Withdrawal"}
-              </button>
-            </form>
-          )}
-
-          {activeTab === "transfer" && (
-            <form onSubmit={handleTransfer} className="max-w-md">
-              <h3 className="text-lg font-semibold text-gray-900 mb-4">Transfer Funds</h3>
-              <div className="mb-4">
-                <label className="block text-sm font-medium text-gray-700 mb-2">Recipient User ID</label>
-                <input
-                  type="text"
-                  value={recipientId}
-                  onChange={(e) => setRecipientId(e.target.value)}
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
-                  placeholder="Enter user ID"
-                  required
-                />
-              </div>
-              <div className="mb-4">
-                <label className="block text-sm font-medium text-gray-700 mb-2">Amount (USD)</label>
-                <input
-                  type="number"
-                  step="0.01"
-                  min="0.01"
-                  max={wallet?.balance}
-                  value={transferAmount}
-                  onChange={(e) => setTransferAmount(e.target.value)}
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
-                  placeholder="0.00"
-                  required
-                />
-                <p className="mt-1 text-xs text-gray-500">Available: ${wallet?.balance.toFixed(2)}</p>
-              </div>
-              <div className="mb-4">
-                <label className="block text-sm font-medium text-gray-700 mb-2">Description (Optional)</label>
-                <input
-                  type="text"
-                  value={transferDescription}
-                  onChange={(e) => setTransferDescription(e.target.value)}
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
-                  placeholder="What's this for?"
-                />
-              </div>
-              <button
-                type="submit"
-                disabled={processing}
-                className="w-full bg-primary-600 text-white py-2 px-4 rounded-lg hover:bg-primary-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors font-medium"
-              >
-                {processing ? "Processing..." : "Transfer Funds"}
-              </button>
-            </form>
-          )}
-        </div>
-      </div>
+        <CardBody className="p-0">
+          <div className="overflow-x-auto">
+            <table className="w-full text-left">
+              <thead className="bg-gray-50 text-[10px] text-gray-500 uppercase font-black tracking-widest border-b">
+                <tr>
+                  <th className="px-8 py-4">Status</th>
+                  <th className="px-8 py-4">Method</th>
+                  <th className="px-8 py-4">Date</th>
+                  <th className="px-8 py-4 text-right">Amount</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-100">
+                {transactions.length === 0 ? (
+                  <tr><td colSpan={4} className="text-center py-16 text-gray-400 italic">No transactions found in database.</td></tr>
+                ) : (
+                  transactions.map((t) => (
+                    <tr key={t.id} className="hover:bg-blue-50/40 transition-all">
+                      <td className="px-8 py-5">
+                        <span className="bg-green-100 text-green-700 px-3 py-1 rounded-full text-[9px] font-black uppercase">Success</span>
+                      </td>
+                      <td className="px-8 py-5 text-sm font-bold text-gray-700 uppercase">{t.type}</td>
+                      <td className="px-8 py-5 text-sm text-gray-500">{new Date(t.createdAt).toLocaleDateString()}</td>
+                      <td className={`px-8 py-5 text-right font-black text-lg ${t.type === 'deposit' ? 'text-green-600' : 'text-red-600'}`}>
+                        {t.type === 'deposit' ? '+' : '-'}${Number(t.amount).toLocaleString()}
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+        </CardBody>
+      </Card>
     </div>
   )
 }
-

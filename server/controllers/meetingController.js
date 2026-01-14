@@ -1,29 +1,18 @@
-const Meeting = require('../models/Meeting');
 
-// 1. Schedule a new meeting
-exports.scheduleMeeting = async (req, res) => {
+exports.updateMeetingStatus = async (req, res) => {
     try {
-        const { title, date, time, investorId, entrepreneurId } = req.body;
-        
-        // Check for conflict (Milestone 3 requirement)
-        const conflict = await Meeting.findOne({ where: { date, time, status: 'accepted' } });
-        if (conflict) {
-            return res.status(400).json({ message: "Time slot already booked!" });
+        const { id } = req.params;
+        const { status } = req.body; // 'accepted' or 'rejected'
+
+        const meeting = await Meeting.findByPk(id);
+        if (!meeting) {
+            return res.status(404).json({ message: "Meeting not found" });
         }
 
-        const meeting = await Meeting.create({ title, date, time, investorId, entrepreneurId });
-        res.status(201).json({ message: "Meeting requested!", meeting });
-    } catch (error) {
-        res.status(500).json({ error: error.message });
-    }
-};
+        meeting.status = status;
+        await meeting.save();
 
-// 2. Get meetings for a specific user
-exports.getMeetings = async (req, res) => {
-    try {
-        const { userId } = req.params;
-        const meetings = await Meeting.findAll({ where: { entrepreneurId: userId } }); // Or investorId
-        res.json(meetings);
+        res.json({ message: `Meeting ${status} successfully!`, meeting });
     } catch (error) {
         res.status(500).json({ error: error.message });
     }
