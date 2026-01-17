@@ -1,7 +1,12 @@
+/**
+ * NEXUS PLATFORM - MAIN APP ENTRY
+ * Facilitates routing and global state management for the entire project.
+ */
+
 import { BrowserRouter as Router, Routes, Route, Navigate } from "react-router-dom"
 import { AuthProvider } from "./context/AuthContext"
 import { SocketProvider } from "./context/SocketContext"
-import { NotificationProvider } from "./context/NotificationContext" // Import NotificationProvider
+import { NotificationProvider } from "./context/NotificationContext"
 import { IncomingCallModal } from "./components/call/IncomingCallModal"
 import { useCallManager } from "./hooks/useCallManager"
 
@@ -36,88 +41,67 @@ import { WalletPage } from "./pages/Wallet/WalletPage"
 // Chat Pages
 import { ChatPage } from "./pages/chat/ChatPage"
 
+/**
+ * AppContent Component:
+ * Handles the actual routing and the global Call Modal.
+ */
 function AppContent() {
+  // Milestone 4: Call manager logic for real-time signaling
   const { incomingCall, acceptCall, declineCall } = useCallManager()
 
   return (
     <>
       <Routes>
-        {/* Authentication Routes */}
+        {/* --- AUTHENTICATION ROUTES (Milestone 2) --- */}
         <Route path="/login" element={<LoginPage />} />
         <Route path="/register" element={<RegisterPage />} />
 
-        {/* Dashboard Routes */}
+        {/* --- DASHBOARD ROUTES (Milestone 2 & 8) --- */}
         <Route path="/dashboard" element={<DashboardLayout />}>
           <Route path="entrepreneur" element={<EntrepreneurDashboard />} />
           <Route path="investor" element={<InvestorDashboard />} />
         </Route>
 
-        {/* Profile Routes */}
+        {/* --- PROFILE ROUTES (Fixes User Not Found) --- */}
         <Route path="/profile" element={<DashboardLayout />}>
           <Route path="entrepreneur/:id" element={<EntrepreneurProfile />} />
           <Route path="investor/:id" element={<InvestorProfile />} />
         </Route>
 
-        {/* Feature Routes */}
-        <Route path="/investors" element={<DashboardLayout />}>
-          <Route index element={<InvestorsPage />} />
+        {/* --- COLLABORATION FEATURES (Milestones 3, 5, 6) --- */}
+        <Route element={<DashboardLayout />}>
+          <Route path="/investors" element={<InvestorsPage />} />
+          <Route path="/entrepreneurs" element={<EntrepreneursPage />} />
+          <Route path="/messages" element={<MessagesPage />} />
+          <Route path="/notifications" element={<NotificationsPage />} />
+          <Route path="/documents" element={<DocumentsPage />} />
+          <Route path="/wallet" element={<WalletPage />} />
+          <Route path="/settings" element={<SettingsPage />} />
+          <Route path="/help" element={<HelpPage />} />
+          <Route path="/deals" element={<DealsPage />} />
+          
+          {/* Chat Integration */}
+          <Route path="/chat" element={<ChatPage />} />
+          <Route path="/chat/:userId" element={<ChatPage />} />
         </Route>
 
-        <Route path="/entrepreneurs" element={<DashboardLayout />}>
-          <Route index element={<EntrepreneursPage />} />
-        </Route>
-
-        <Route path="/messages" element={<DashboardLayout />}>
-          <Route index element={<MessagesPage />} />
-        </Route>
-
-        <Route path="/notifications" element={<DashboardLayout />}>
-          <Route index element={<NotificationsPage />} />
-        </Route>
-
-        <Route path="/documents" element={<DashboardLayout />}>
-          <Route index element={<DocumentsPage />} />
-        </Route>
-
-        <Route path="/wallet" element={<DashboardLayout />}>
-          <Route index element={<WalletPage />} />
-        </Route>
-
-        <Route path="/settings" element={<DashboardLayout />}>
-          <Route index element={<SettingsPage />} />
-        </Route>
-
-        <Route path="/help" element={<DashboardLayout />}>
-          <Route index element={<HelpPage />} />
-        </Route>
-
-        <Route path="/deals" element={<DashboardLayout />}>
-          <Route index element={<DealsPage />} />
-        </Route>
-
-        {/* Chat Routes */}
-        <Route path="/chat" element={<DashboardLayout />}>
-          <Route index element={<ChatPage />} />
-          <Route path=":userId" element={<ChatPage />} />
-        </Route>
-
-        {/* Full-screen call routes (no layout) */}
+        {/* --- VIDEO CALL ROUTES (Milestone 4) --- */}
+        {/* Full-screen UI for active calls */}
         <Route path="/calls/audio/:roomId/:userId" element={<FullScreenCallPage callType="audio" />} />
         <Route path="/calls/video/:roomId/:userId" element={<FullScreenCallPage callType="video" />} />
-
-        {/* Legacy call routes (with layout) */}
+        
+        {/* Room Join Logic */}
         <Route path="/calls/:roomId" element={<CallPage />} />
         <Route path="/calls" element={<DashboardLayout />}>
           <Route path=":roomId" element={<CallPage />} />
         </Route>
 
-        {/* Redirect root to login */}
+        {/* --- REDIRECTS --- */}
         <Route path="/" element={<Navigate to="/login" replace />} />
-
-        {/* Catch all other routes and redirect to login */}
         <Route path="*" element={<Navigate to="/login" replace />} />
       </Routes>
 
+      {/* Real-time Video Call Notification Layer */}
       {incomingCall && (
         <IncomingCallModal
           caller={incomingCall.caller}
@@ -130,19 +114,22 @@ function AppContent() {
   )
 }
 
+/**
+ * Root App Provider Wrapper:
+ * Standardizes the order of global state providers for the internship submission.
+ */
 function App() {
   return (
     <AuthProvider>
-      <NotificationProvider> {/* Add NotificationProvider here */}
+      <NotificationProvider>
         <SocketProvider>
           <Router>
             <AppContent />
           </Router>
         </SocketProvider>
-      </NotificationProvider> {/* Close NotificationProvider here */}
+      </NotificationProvider>
     </AuthProvider>
   )
 }
 
-export default App
-
+export default App;

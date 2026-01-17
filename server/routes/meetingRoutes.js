@@ -1,3 +1,9 @@
+/**
+ * MEETING MANAGEMENT ROUTES
+ * Project: Nexus - Investor & Entrepreneur Collaboration Platform
+ * Logic: Scheduling, Calendar Sync, and Accept/Reject Responses
+ */
+
 const express = require('express');
 const router = express.Router();
 const { 
@@ -6,17 +12,26 @@ const {
     updateMeetingStatus 
 } = require('../controllers/meetingController');
 
-// 1. Create a meeting (Milestone 3: Scheduling)
-// Endpoint: POST /api/meetings/schedule
+/**
+ * @route   POST /api/meetings/schedule
+ * @desc    Create a new meeting request between an Entrepreneur and Investor
+ * @access  Private (Requires Token)
+ */
 router.post('/schedule', scheduleMeeting);
 
-// 2. Get all meetings for a specific user (Milestone 3: Calendar Sync)
-// Endpoint: GET /api/meetings/:userId
+/**
+ * @route   GET /api/meetings/:userId
+ * @desc    Retrieve all meetings associated with a specific User ID (for Calendar view)
+ * @access  Private (Requires Token)
+ */
 router.get('/:userId', getMeetings);
 
-// 3. Respond to a meeting (Milestone 3: Accept/Reject)
-// Endpoint: PUT /api/meetings/respond/:id
-// This is the route that allows the "Confirm Accept" button to work
+/**
+ * @route   PUT /api/meetings/respond/:id
+ * @desc    Allows a user (Investor) to Accept or Reject a meeting invitation
+ * @params  id - The Unique ID of the meeting in MySQL
+ * @access  Private (Requires Token)
+ */
 router.put('/respond/:id', updateMeetingStatus);
 
 module.exports = router;
