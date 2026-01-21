@@ -28,7 +28,3 @@ Nexus is a collaboration platform designed specifically for **Investors** and **
    - Navigate to `/client`
    - Run `npm install`
    - Start with `npm run dev`
-
----
-**Developer:** Omer Ali  
-**Submission Date:** December 31, 2025
